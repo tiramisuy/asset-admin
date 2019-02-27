@@ -1,10 +1,13 @@
 package com.jubao.common.support.redis;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,6 +22,7 @@ import java.util.concurrent.TimeUnit;
  * 操作有序set：redisTemplate.opsForZSet();
  * 
  */
+@Slf4j
 @Component
 public class RedisCacheManager {
 
@@ -642,5 +646,49 @@ public class RedisCacheManager {
             e.printStackTrace();
             return 0;
         }
+    }
+
+    /**
+     * 设置缓存锁与过期时间（原子性）
+     * @param key
+     * @param value
+     * @param seconds 过期时间（秒）
+     */
+    public boolean setLock(String key, Object value, int seconds){
+        try {
+            Boolean result = redisTemplate.opsForValue().setIfAbsent(key, value, seconds, TimeUnit.SECONDS);
+            if (result) {
+                log.debug("lock {} success", key);
+                return true;
+            }
+        } catch (Exception e) {
+            log.error("lock {} fail", key, e);
+        }
+        return false;
+    }
+
+    /**
+     * 对比请求标识后释放锁 lua脚本确保原子性
+     * @param key
+     * @param requestId 请求标识
+     */
+    public boolean releaseLock(String key, String requestId){
+        try {
+            Boolean hasKey = redisTemplate.hasKey(key);
+            if (hasKey != null && hasKey){
+                String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+                RedisScript<Long> redisScript = RedisScript.of(script,Long.class);
+                Long result = redisTemplate.execute(redisScript, Collections.singletonList(key), requestId);
+                if (result != null && result == 1){
+                    log.debug("del {} success", key);
+                    return true;
+                }
+            }else {
+                log.debug("del {} not exists", key);
+            }
+        } catch (Exception e) {
+            log.error("del {} fail", key, e);
+        }
+        return false;
     }
 }
