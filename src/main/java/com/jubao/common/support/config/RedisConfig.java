@@ -23,8 +23,12 @@ public class RedisConfig {
     @Bean
     public RedisTemplate redisTemplate(RedisConnectionFactory redisConnectionFactory, ObjectMapper objectMapper) {
         RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+
+        // 指定要序列化的域，field,get和set,以及修饰符范围，ANY是都有包括private和public
         objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+
         objectMapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
+
         // 如果为null或者 空字符串和空集合都不会被序列化
         objectMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
 
@@ -51,6 +55,7 @@ public class RedisConfig {
         redisTemplate.setValueSerializer(objectJackson2JsonRedisSerializer);
         redisTemplate.setHashKeySerializer(new StringRedisSerializer());
         redisTemplate.setHashValueSerializer(objectJackson2JsonRedisSerializer);
+        //redisTemplate.setEnableTransactionSupport(true);
         return redisTemplate;
     }
 
